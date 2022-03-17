@@ -1,18 +1,14 @@
-// Adapted from Prof. Koyama's MPF code in his textbook
-// Author: Chuanqi Zhu
-// Created on: 2022/2/16
-// Updated on 2022/03/17
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
 
-#define NDX 100 //差分計算における計算領域一辺の分割数
-#define NDY 100
-#define NDZ 100
+#define NDX 50 //差分計算における計算領域一辺の分割数
+#define NDY 50
+#define NDZ 50
 
-#define N 2 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
+#define N 3 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
 
 int ndx = NDX;
 int ndy = NDY;
@@ -84,9 +80,9 @@ double t, r0, r;
 double calcTheta(double dy, double dx);
 
 //******* メインプログラム ******************************************
-int main()
+int main(int argc, char *argv[])
 {
-    nstep = 1001;
+    nstep = 601;
     dtime = 5.0;
     temp = 1000.0;
     L = 2000.0;
@@ -133,43 +129,55 @@ int main()
             }
         }
     }
-    // thij[1][0] = PI / 4.0;
-    // thij[0][1] = PI / 4.0;
-    // vpij[1][0] = PI / 4.0;
-    // vpij[0][1] = PI / 4.0;
-    // etaij[1][0] = PI / 4.0;
-    // etaij[0][1] = PI / 4.0;
+    thij[1][0] = PI / 4.0;
+    thij[0][1] = PI / 4.0;
+    vpij[1][0] = PI / 4.0;
+    vpij[0][1] = PI / 4.0;
+    etaij[1][0] = PI / 4.0;
+    etaij[0][1] = PI / 4.0;
+    anij[0][2] = 0;
+    anij[2][0] = 0;
 
     double(*phi)[N][NDX][NDY][NDZ] = malloc(sizeof(*phi));
     double(*phi2)[N][NDX][NDY][NDZ] = malloc(sizeof(*phi2));
     int(*phiIdx)[N + 1][NDX][NDY][NDZ] = malloc(sizeof(*phiIdx));
     int(*phiNum)[NDX][NDY][NDZ] = malloc(sizeof(*phiNum));
 
+    int intpos, isLiquid, dist;
+
     for (i = 0; i <= ndmx; i++)
     {
         for (j = 0; j <= ndmy; j++)
         {
-            for (l = 0; l <= ndmz; l++)
+            for (l = 0; l <= ndmy; l++)
             {
-                if ((i - NDX / 2) * (i - NDX / 2) + (j - NDY / 2) * (j - NDY / 2) + (l - NDZ / 2) * (l - NDZ / 2) < 100)
+                if (i < NDX / 5 && j < NDY / 2)
                 {
                     (*phi)[1][i][j][l] = 1.0;
+                    (*phi)[2][i][j][l] = 0.0;
+                    (*phi)[0][i][j][l] = 0.0;
+                }
+                else if (i < NDX / 5 && j >= NDY / 2)
+                {
+                    (*phi)[1][i][j][l] = 0.0;
+                    (*phi)[2][i][j][l] = 1.0;
                     (*phi)[0][i][j][l] = 0.0;
                 }
                 else
                 {
                     (*phi)[1][i][j][l] = 0.0;
+                    (*phi)[2][i][j][l] = 0.0;
                     (*phi)[0][i][j][l] = 1.0;
                 }
             }
         }
     }
-    // }
 
 start:;
 
     if ((((int)(istep) % 200) == 0))
     {
+
         FILE *stream;
         char buffer[30];
         sprintf(buffer, "3d%d.vtk", istep);
@@ -193,7 +201,7 @@ start:;
             {
                 for (l = 0; l <= ndmz; l++)
                 {
-                    fprintf(stream, "%e\n", (*phi)[1][i][j][l]);
+                    fprintf(stream, "%e\n", ((*phi)[0][i][j][l] * 0.5 + (*phi)[2][i][j][l]));
                 }
             }
         }
@@ -256,11 +264,11 @@ start:;
                 lm = l - 1;
                 if (i == ndmx)
                 {
-                    ip = 0;
+                    ip = ndmx;
                 }
                 if (i == 0)
                 {
-                    im = ndmx;
+                    im = 0;
                 }
                 if (j == ndmy)
                 {
@@ -315,12 +323,12 @@ start:;
                 lm = l - 1;
                 if (i == ndmx)
                 {
-                    ip = 0;
+                    ip = ndmx;
                 }
                 if (i == 0)
                 {
-                    im = ndmx;
-                } //周期的境界条件
+                    im = 0;
+                }
                 if (j == ndmy)
                 {
                     jp = 0;
@@ -522,19 +530,67 @@ start:;
         }     // i
     }
 
-    for (k = 0; k <= nm; k++)
+    for (i = 0; i <= ndmx; i++)
     {
-        for (i = 0; i <= ndmx; i++)
+        isLiquid = 1;
+        intpos = i;
+        for (j = 0; j <= ndmy; j++)
         {
-            for (j = 0; j <= ndmy; j++)
+            for (l = 0; l <= ndmz; l++)
             {
-                for (l = 0; l <= ndmz; l++)
+                if ((*phi)[0][i][j][l] < 1.0)
                 {
-                    (*phi)[k][i][j][l] = (*phi2)[k][i][j][l];
+                    isLiquid = 0;
+                }
+            }
+        }
+        if (isLiquid == 1)
+        {
+            break;
+        }
+    }
+
+    // if ((((int)(istep) % 200) == 0))
+    // {
+    //     printf("the interface postion is %d\n", intpos);
+    // }
+    if (intpos > NDX / 2)
+    {
+        dist = intpos - NDX / 2;
+    }
+    else
+    {
+        dist = 0;
+    }
+
+    // Moving frame
+    for (i = 0; i <= (ndmx - dist); i++)
+    {
+        for (j = 0; j <= ndmy; j++)
+        {
+            for (l = 0; l <= ndmz; l++)
+            {
+                for (k = 0; k <= nm; k++)
+                {
+                    (*phi)[k][i][j][l] = (*phi2)[k][i + dist][j][l];
                 }
             }
         }
     }
+
+    // for (k = 0; k <= nm; k++)
+    // {
+    //     for (i = 0; i <= ndmx; i++)
+    //     {
+    //         for (j = 0; j <= ndmy; j++)
+    //         {
+    //             for (l = 0; l <= ndmz; l++)
+    //             {
+    //                 (*phi)[k][i][j][l] = (*phi2)[k][i][j][l];
+    //             }
+    //         }
+    //     }
+    // }
 
     for (i = 0; i <= ndmx; i++)
     {

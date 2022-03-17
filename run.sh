@@ -1,1 +1,1 @@
-gcc *.c -o main && rm *.dat *.vtk && ./main && python plot.py
+gcc main.c -o main && rm -f *.vtk && ./main
