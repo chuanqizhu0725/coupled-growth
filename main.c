@@ -5,7 +5,7 @@
 #include <math.h>
 
 #define NDX 50 //差分計算における計算領域一辺の分割数
-#define NDY 50
+#define NDY 10
 #define NDZ 50
 
 #define N 3 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
@@ -73,9 +73,6 @@ double term0;
 double termx, termx0, termx1, termx0dx, termx1dx;
 double termy, termy0, termy1, termy0dy, termy1dy;
 double termz, termz0, termz1, termz0dz, termz1dz;
-
-int x11, y11, x1h[10], y1h[10]; //初期核の座標
-double t, r0, r;
 
 double calcTheta(double dy, double dx);
 
@@ -149,15 +146,15 @@ int main(int argc, char *argv[])
     {
         for (j = 0; j <= ndmy; j++)
         {
-            for (l = 0; l <= ndmy; l++)
+            for (l = 0; l <= ndmz; l++)
             {
-                if (i < NDX / 5 && j < NDY / 2)
+                if (i < NDX / 5 && l < NDZ / 2)
                 {
                     (*phi)[1][i][j][l] = 1.0;
                     (*phi)[2][i][j][l] = 0.0;
                     (*phi)[0][i][j][l] = 0.0;
                 }
-                else if (i < NDX / 5 && j >= NDY / 2)
+                else if (i < NDX / 5 && l >= NDZ / 2)
                 {
                     (*phi)[1][i][j][l] = 0.0;
                     (*phi)[2][i][j][l] = 1.0;
@@ -206,48 +203,6 @@ start:;
             }
         }
         fclose(stream);
-
-        // Draw z-plane
-        // FILE *fp;
-
-        // fp = fopen("phi.dat", "w");
-
-        // for (int i = 0; i <= ndmx; i++)
-        // {
-        //     for (int j = 0; j <= ndmy; j++)
-        //     {
-        //         fprintf(fp, "%e\n", phi[1][i][j][NDZ / 2]);
-        //     }
-        // }
-        // fclose(fp);
-
-        // Draw y-plane
-        // FILE *fp;
-
-        // fp = fopen("phi.dat", "w");
-
-        // for (int i = 0; i <= ndmx; i++)
-        // {
-        //     for (int l = 0; l <= ndmz; l++)
-        //     {
-        //         fprintf(fp, "%e\n", phi[1][i][NDY / 2][l]);
-        //     }
-        // }
-        // fclose(fp);
-
-        // Draw x-plane
-        // FILE *fp;
-
-        // fp = fopen("phi.dat", "w");
-
-        // for (int j = 0; j <= ndmy; j++)
-        // {
-        //     for (int l = 0; l <= ndmz; l++)
-        //     {
-        //         fprintf(fp, "%e\n", phi[1][NDX / 2][j][l]);
-        //     }
-        // }
-        // fclose(fp);
     }
 
     for (i = 0; i <= ndmx; i++)
@@ -550,10 +505,6 @@ start:;
         }
     }
 
-    // if ((((int)(istep) % 200) == 0))
-    // {
-    //     printf("the interface postion is %d\n", intpos);
-    // }
     if (intpos > NDX / 2)
     {
         dist = intpos - NDX / 2;
@@ -577,20 +528,6 @@ start:;
             }
         }
     }
-
-    // for (k = 0; k <= nm; k++)
-    // {
-    //     for (i = 0; i <= ndmx; i++)
-    //     {
-    //         for (j = 0; j <= ndmy; j++)
-    //         {
-    //             for (l = 0; l <= ndmz; l++)
-    //             {
-    //                 (*phi)[k][i][j][l] = (*phi2)[k][i][j][l];
-    //             }
-    //         }
-    //     }
-    // }
 
     for (i = 0; i <= ndmx; i++)
     {
