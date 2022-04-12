@@ -12,7 +12,7 @@
 #define NDY 40
 #define NDZ 40
 
-#define N 2 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
+#define N 3 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
 
 int ndx = NDX;
 int ndy = NDY;
@@ -48,7 +48,7 @@ double W0;               //ペナルティー項の係数
 double A0;               //勾配エネルギー係数
 double S0;               //粒界移動の駆動力
 double temp;             //温度
-double sum1, sum2, sum3; //各種の和の作業変数
+double sum1, sum2, sump; //各種の和の作業変数
 double pddtt;            //フェーズフィールドの時間変化率
 
 double gamma0; //粒界エネルギ密度
@@ -56,20 +56,25 @@ double delta;  //粒界幅（差分ブロック数にて表現）
 double mobi;   //粒界の易動度
 double vm0;    //モル体積
 
-double astre;
+double astre, astrem;
 double th, vp, eta;
+double thii, vpii, etaii;
 double thetax, thetay;
 double epsilon0;
 double termiikk, termjjkk;
+double miijj;
 
 double phidx, phidy, phidz;
+double phidxii, phidyii, phidzii;
 double phidxx, phidyy, phidzz;
 double phidxy, phidxz, phidyz;
-double phiabs;
+double phiabs, phiabsii;
 
 double xxp, xyp, xzp, yxp, yyp, yzp, zxp, zyp, zzp;
+double xxpii, xypii, xzpii, yxpii, yypii, yzpii, zxpii, zypii, zzpii;
 
 double phidxp, phidyp, phidzp;
+double phidxpii, phidypii, phidzpii;
 double phidxpx, phidypx, phidzpx;
 double phidxpy, phidypy, phidzpy;
 double phidxpz, phidypz, phidzpz;
@@ -85,18 +90,19 @@ double t, r0, r;
 //******* メインプログラム ******************************************
 int main(int argc, char *argv[])
 {
-    nstep = 501;
-    pstep = 100;
+    nstep = 2001;
+    pstep = 200;
     dtime = 5.0;
     temp = 1000.0;
     L = 2000.0;
     vm0 = 7.0e-6;
-    delta = 7.0;
+    delta = 5.0;
     mobi = 1.0;
 
     dx = L / 40.0 * 1.0e-9;              //差分プロック１辺の長さ(m)
     gamma0 = 0.5 * vm0 / RR / temp / dx; //粒界エネルギ密度（0.5J/m^2）を無次元化
     astre = 0.05;
+    astrem = 0.5;
     A0 = 8.0 * delta * gamma0 / PI / PI; //勾配エネルギー係数[式(4.40)]
     W0 = 4.0 * gamma0 / delta;           //ペナルティー項の係数[式(4.40)]
     M0 = mobi * PI * PI / (8.0 * delta); //粒界の易動度[式(4.40)]
@@ -133,12 +139,14 @@ int main(int argc, char *argv[])
             }
         }
     }
-    // thij[1][2] = PI / 4.0;
-    // thij[2][1] = PI / 4.0;
-    // vpij[1][2] = PI / 4.0;
-    // vpij[2][1] = PI / 4.0;
-    // etaij[1][2] = PI / 4.0;
-    // etaij[2][1] = PI / 4.0;
+    // thij[1][0] = PI / 4.0;
+    // thij[0][1] = PI / 4.0;
+    // vpij[1][0] = PI / 8.0;
+    // vpij[0][1] = PI / 8.0;
+    // vpij[2][0] = PI / 4.0;
+    // vpij[0][2] = PI / 4.0;
+    // etaij[1][0] = PI / 4.0;
+    // etaij[0][1] = PI / 4.0;
 
     double phi[N][NDX][NDY][NDZ], phi2[N][NDX][NDY][NDZ]; //フェーズフィールド、フェーズフィールド補助配列
     int phiIdx[N + 1][NDX][NDY][NDZ];                     //位置(i,j)およびその周囲(i±1,j±1)において、pが０ではない方位の番号
@@ -150,14 +158,24 @@ int main(int argc, char *argv[])
         {
             for (l = 0; l <= ndmz; l++)
             {
-                if ((i - NDX / 2) * (i - NDX / 2) + (j - NDY / 2) * (j - NDY / 2) + (l - NDZ / 2) * (l - NDZ / 2) < 36)
+                // if ((i < NDX / 2) && (l < NDZ / 4))
+                if (((i - NDX / 2) * (i - NDX / 2) + (j - NDY / 2) * (j - NDY / 2) + (l - NDZ / 2) * (l - NDZ / 2)) < (NDX / 8) * (NDX / 8))
                 {
                     phi[1][i][j][l] = 1.0;
+                    phi[2][i][j][l] = 0.0;
                     phi[0][i][j][l] = 0.0;
                 }
+                // else if (((i - NDX * 3 / 4) * (i - NDX * 3 / 4) + (l - NDZ / 4) * (l - NDZ / 4)) < (NDX / 8) * (NDX / 8))
+                // else if ((i >= NDX / 2) && (l < NDZ / 4))
+                // {
+                //     phi[1][i][j][l] = 0.0;
+                //     phi[2][i][j][l] = 1.0;
+                //     phi[0][i][j][l] = 0.0;
+                // }
                 else
                 {
                     phi[1][i][j][l] = 0.0;
+                    phi[2][i][j][l] = 0.0;
                     phi[0][i][j][l] = 1.0;
                 }
             }
@@ -186,13 +204,18 @@ start:;
         fprintf(stream, "SCALARS scalars float\n");
         fprintf(stream, "LOOKUP_TABLE default\n");
 
-        for (i = 0; i <= ndmx; i++)
+        for (l = 0; l <= ndmz; l++)
         {
             for (j = 0; j <= ndmy; j++)
             {
-                for (l = 0; l <= ndmz; l++)
+                for (i = 0; i <= ndmx; i++)
                 {
-                    fprintf(stream, "%e\n", phi[1][i][j][l]);
+                    sump = 0.0;
+                    for (k = 0; k <= nm; k++)
+                    {
+                        sump += phi[k][i][j][l] * phi[k][i][j][l];
+                    }
+                    fprintf(stream, "%e\n", sump);
                 }
             }
         }
@@ -229,11 +252,11 @@ start:;
                 }
                 if (l == ndmz)
                 {
-                    lp = 0;
+                    lp = ndmz;
                 }
                 if (l == 0)
                 {
-                    lm = ndmz;
+                    lm = 0;
                 }
 
                 //--- 位置(i,j)およびその周囲(i±1,j±1)において、pが０ではない方位の個数---
@@ -288,16 +311,22 @@ start:;
                 }
                 if (l == ndmz)
                 {
-                    lp = 0;
+                    lp = ndmz;
                 }
                 if (l == 0)
                 {
-                    lm = ndmz;
+                    lm = 0;
                 }
 
                 for (n1 = 1; n1 <= phiNum[i][j][l]; n1++)
                 {
                     ii = phiIdx[n1][i][j][l];
+
+                    phidxii = (phi[ii][ip][j][l] - phi[ii][im][j][l]) / 2.0;
+                    phidyii = (phi[ii][i][jp][l] - phi[ii][i][jm][l]) / 2.0;
+                    phidzii = (phi[ii][i][j][lp] - phi[ii][i][j][lm]) / 2.0;
+                    phiabsii = phidxii * phidxii + phidyii * phidyii + phidzii * phidzii;
+
                     pddtt = 0.0;
                     for (n2 = 1; n2 <= phiNum[i][j][l]; n2++)
                     {
@@ -459,10 +488,36 @@ start:;
                             {
                                 termjjkk = aij[jj][kk] * (phidxx + phidyy + phidzz);
                             }
-
                             sum1 += 0.5 * (termiikk - termjjkk) + (wij[ii][kk] - wij[jj][kk]) * phi[kk][i][j][l];
                         }
-                        pddtt += -2.0 * mij[ii][jj] / (double)phiNum[i][j][l] * (sum1 - 8.0 / PI * fij[ii][jj] * sqrt(phi[ii][i][j][l] * phi[jj][i][j][l]));
+
+                        thii = thij[ii][jj];
+                        vpii = vpij[ii][jj];
+                        etaii = etaij[ii][jj];
+
+                        xxpii = cos(thii) * cos(vpii);
+                        yxpii = sin(thii) * cos(vpii);
+                        zxpii = sin(vpii);
+                        xypii = -sin(thii) * cos(etaii) - cos(thii) * sin(vpii) * sin(etaii);
+                        yypii = cos(thii) * cos(etaii) - sin(thii) * sin(vpii) * sin(etaii);
+                        zypii = cos(vpii) * sin(etaii);
+                        xzpii = sin(etaii) * sin(thii) - cos(etaii) * cos(thii) * sin(vpii);
+                        yzpii = -sin(etaii) * cos(thii) - cos(etaii) * sin(thii) * sin(vpii);
+                        zzpii = cos(etaii) * cos(vpii);
+
+                        phidxpii = phidxii * xxpii + phidyii * yxpii + phidzii * zxpii;
+                        phidypii = phidxii * xypii + phidyii * yypii + phidzii * zypii;
+                        phidzpii = phidxii * xzpii + phidyii * yzpii + phidzii * zzpii;
+
+                        if (anij[ii][jj] == 1 && phiabsii != 0.0)
+                        {
+                            miijj = mij[ii][jj] * (1.0 - 3.0 * astrem + 4.0 * astrem * (pow(phidxpii, 4.0) + pow(phidypii, 4.0) + pow(phidzpii, 4.0)) / pow(phiabsii, 2.0));
+                        }
+                        else
+                        {
+                            miijj = mij[ii][jj];
+                        }
+                        pddtt += -2.0 * miijj / (double)phiNum[i][j][l] * (sum1 - 8.0 / PI * fij[ii][jj] * sqrt(phi[ii][i][j][l] * phi[jj][i][j][l]));
                         //フェーズフィールドの発展方程式[式(4.31)]
                     }
                     phi2[ii][i][j][l] = phi[ii][i][j][l] + pddtt * dtime; //フェーズフィールドの時間発展（陽解法）
