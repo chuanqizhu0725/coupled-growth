@@ -1,10 +1,11 @@
 // Adapted from Prof. Koyama's MPF code in his textbook
 // Author: Chuanqi Zhu
 // Created on: 2022/2/16
-// Updated on 2022/04/11
+// Updated on 2022/04/20
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <iostream>
 #include <time.h>
 #include <math.h>
 #include "CImg.h" //CImg ライブラリ（描画用）使用のためのヘッダ
@@ -12,36 +13,25 @@
 using namespace cimg_library;
 
 #define NDX 100 //差分計算における計算領域一辺の分割数
-#define NDY 100
+#define NDY 1
 #define NDZ 1
 
-#define N 3 //考慮する結晶方位の数＋１(MPF0.cppと比較して、この値を大きくしている)
+#define N 2
 
-int ndx = NDX;
-int ndy = NDY;
-int ndz = NDZ;
 int ndmx = NDX - 1;
 int ndmy = NDY - 1; //計算領域の一辺の差分分割数(差分ブロック数), ND-1を定義
 int ndmz = NDZ - 1;
-int nm = N - 1, nmm = N - 2; //考慮する結晶方位の数、N-2（考慮する結晶方位の数－１）を定義
-double PI = 3.141592;        //π、計算カウント数
+int nm = N - 1;
+double PI = 3.141592; //π、計算カウント数
 
-double aij[N][N]; //勾配エネルギー係数
-double wij[N][N]; //ペナルティー項の係数
-double mij[N][N]; //粒界の易動度
-double fij[N][N]; //粒界移動の駆動力
-int anij[N][N];
-double thij[N][N];
-double vpij[N][N];
-double etaij[N][N];
 int phinum;
 
 CImg<unsigned char> phi_fldxy(NDX, NDY, 1, 3);
 char outFilePhi_xy[64];
 
-int i, j, k, ii, jj, kk, ll, it; //整数
-int ip, im, jp, jm, kp, km;      //整数
-int n1, n2, n3;                  //整数
+int i, j, k, ni, ii, jj, kk, ll, it; //整数
+int ip, im, jp, jm, kp, km;          //整数
+int n1, n2, n3;                      //整数
 
 int istep = 0;
 // int n000;		//位置(i,j)において、pが０ではない方位の個数（n00>=n000）
@@ -53,12 +43,13 @@ double W0;           //ペナルティー項の係数
 double A0;           //勾配エネルギー係数
 double S0;           //粒界移動の駆動力
 double F0;
-double temp;             //温度
+double temp0;            //温度
 double sum1, sum2, sump; //各種の和の作業変数
 double pddtt;            //フェーズフィールドの時間変化率
 
 double Tm, dH;
 double sph_s, kap_s, sph_l, kap_l;
+double Tg, Tv, Tr, T_left, T_right;
 
 double Cdt_s = kap_s / sph_s;
 double Cdt_l = kap_l / sph_l;
@@ -96,14 +87,96 @@ double termx, termx0, termx1, termx0dx, termx1dx;
 double termy, termy0, termy1, termy0dy, termy1dy;
 double termz, termz0, termz1, termz0dz, termz1dz;
 
+double sumplane, inttemp;
+int hasS, allS;
+int intpos;
+
 int x11, y11, x1h[10], y1h[10]; //初期核の座標
 double t, r0, r;
+
+double ****phi, ****phi2;
+double ***temp;
+int ***phiNum, ****phiIdx;
+double **aij, **wij, **mij;
+double **anij, **thij, **vpij, **etaij;
 
 //******* メインプログラム ******************************************
 int main(int argc, char *argv[])
 {
+    phi = new double ***[N];
+    phi2 = new double ***[N];
+    for (ni = 0; ni <= nm; ni++)
+    {
+        phi[ni] = new double **[NDX];
+        phi2[ni] = new double **[NDX];
+        for (i = 0; i <= ndmx; i++)
+        {
+            phi[ni][i] = new double *[NDY];
+            phi2[ni][i] = new double *[NDY];
+            for (j = 0; j <= ndmy; j++)
+            {
+                phi[ni][i][j] = new double[NDZ];
+                phi2[ni][i][j] = new double[NDZ];
+            }
+        }
+    }
+
+    phiIdx = new int ***[N + 1];
+    for (ni = 0; ni <= N; ni++)
+    {
+        phiIdx[ni] = new int **[NDX];
+        for (i = 0; i <= ndmx; i++)
+        {
+            phiIdx[ni][i] = new int *[NDY];
+            for (j = 0; j <= ndmy; j++)
+            {
+                phiIdx[ni][i][j] = new int[NDZ];
+            }
+        }
+    }
+
+    temp = new double **[NDX];
+    for (i = 0; i <= ndmx; i++)
+    {
+        temp[i] = new double *[NDY];
+
+        for (j = 0; j <= ndmy; j++)
+        {
+            temp[i][j] = new double[NDZ];
+        }
+    }
+
+    phiNum = new int **[NDX];
+    for (i = 0; i <= ndmx; i++)
+    {
+        phiNum[i] = new int *[NDY];
+
+        for (j = 0; j <= ndmy; j++)
+        {
+            phiNum[i][j] = new int[NDZ];
+        }
+    }
+
+    aij = new double *[N];
+    wij = new double *[N];
+    mij = new double *[N];
+    anij = new double *[N];
+    thij = new double *[N];
+    vpij = new double *[N];
+    etaij = new double *[N];
+    for (ni = 0; ni <= nm; ni++)
+    {
+        aij[ni] = new double[N];
+        wij[ni] = new double[N];
+        mij[ni] = new double[N];
+        anij[ni] = new double[N];
+        thij[ni] = new double[N];
+        vpij[ni] = new double[N];
+        etaij[ni] = new double[N];
+    }
+
     nstep = 1001;
-    pstep = 500;
+    pstep = 100;
 
     dx = 1.0e-5;
     dtime = 1.0e-6;
@@ -116,7 +189,13 @@ int main(int argc, char *argv[])
 
     Tm = 1687.0;
     dH = 4.122e9;
-    temp = 1686.95;
+    temp0 = 1686.95;
+
+    Tg = 8.0e3;
+    Tv = 1.5e-4;
+    Tr = Tg * Tv;
+    T_left = 1686 - NDX / 4 * dx * Tg;
+    T_right = T_left + Tg * NDX * dx;
 
     sph_s = 2.29e6;
     kap_s = 22.0;
@@ -142,7 +221,7 @@ int main(int argc, char *argv[])
             etaij[i][j] = 0.0;
             if ((i == 0) || (j == 0))
             {
-                anij[i][j] = 1;
+                anij[i][j] = 0;
             }
             if (i == j)
             {
@@ -162,29 +241,24 @@ int main(int argc, char *argv[])
     // etaij[1][0] = PI / 4.0;
     // etaij[0][1] = PI / 4.0;
 
-    double phi[N][NDX][NDY][NDZ], phi2[N][NDX][NDY][NDZ]; //フェーズフィールド、フェーズフィールド補助配列
-    int phiIdx[N + 1][NDX][NDY][NDZ];                     //位置(i,j)およびその周囲(i±1,j±1)において、pが０ではない方位の番号
-    int phiNum[NDX][NDY][NDZ];
-
     for (i = 0; i <= ndmx; i++)
     {
         for (j = 0; j <= ndmy; j++)
         {
             for (k = 0; k <= ndmz; k++)
             {
-                if (i < NDX / 8)
+                if (i < NDX / 4)
                 // if (((i - NDX / 2) * (i - NDX / 2) + (j - NDY / 2) * (j - NDY / 2) + (k - NDZ / 2) * (k - NDZ / 2)) < (NDX / 8) * (NDX / 8))
                 {
                     phi[1][i][j][k] = 1.0;
-                    phi[2][i][j][k] = 0.0;
                     phi[0][i][j][k] = 0.0;
                 }
                 else
                 {
                     phi[1][i][j][k] = 0.0;
-                    phi[2][i][j][k] = 0.0;
                     phi[0][i][j][k] = 1.0;
                 }
+                temp[i][j][k] = T_left + +i * dx * Tg;
             }
         }
     }
@@ -194,6 +268,8 @@ start:;
 
     if ((((int)(istep) % pstep) == 0))
     {
+        std::cout << "interface position is: " << intpos << std::endl;
+        std::cout << "interface temperature is: " << inttemp << std::endl;
         // ****** XY *******
         cimg_forXY(phi_fldxy, x, y)
         {
@@ -227,12 +303,12 @@ start:;
             {
                 for (i = 0; i <= ndmx; i++)
                 {
-                    sump = 0.0;
-                    for (ii = 0; ii <= nm; ii++)
-                    {
-                        sump += phi[ii][i][j][k] * phi[ii][i][j][k];
-                    }
-                    fprintf(stream, "%e\n", sump);
+                    // sump = 0.0;
+                    // for (ii = 0; ii <= nm; ii++)
+                    // {
+                    //     sump += phi[ii][i][j][k] * phi[ii][i][j][k];
+                    // }
+                    fprintf(stream, "%e\n", phi[1][i][j][k]);
                 }
             }
         }
@@ -269,11 +345,11 @@ start:;
                 }
                 if (k == ndmz)
                 {
-                    kp = ndmz;
+                    kp = 0;
                 }
                 if (k == 0)
                 {
-                    km = 0;
+                    km = ndmz;
                 }
 
                 //--- 位置(i,j)およびその周囲(i±1,j±1)において、pが０ではない方位の個数---
@@ -317,7 +393,7 @@ start:;
                 if (i == 0)
                 {
                     im = 0;
-                } //周期的境界条件
+                }
                 if (j == ndmy)
                 {
                     jp = 0;
@@ -328,11 +404,11 @@ start:;
                 }
                 if (k == ndmz)
                 {
-                    kp = ndmz;
+                    kp = 0;
                 }
                 if (k == 0)
                 {
-                    km = 0;
+                    km = ndmz;
                 }
 
                 for (n1 = 1; n1 <= phiNum[i][j][k]; n1++)
@@ -536,11 +612,11 @@ start:;
                         }
                         if (ii == 1 && jj == 0)
                         {
-                            F0 = -(temp - Tm) * dH / Tm;
+                            F0 = -(temp[i][j][k] - Tm) * dH / Tm;
                         }
                         else if (ii == 0 && jj == 1)
                         {
-                            F0 = (temp - Tm) * dH / Tm;
+                            F0 = (temp[i][j][k] - Tm) * dH / Tm;
                         }
                         pddtt += -2.0 * miijj / (double)phiNum[i][j][k] * (sum1 - 8.0 / PI * F0 * sqrt(phi[ii][i][j][k] * phi[jj][i][j][k]));
                         //フェーズフィールドの発展方程式[式(4.31)]
@@ -592,6 +668,88 @@ start:;
             }
         }
     }
+
+    sumplane = 0.0;
+    hasS = 0;
+    allS = 0;
+    // check if the bottom is solid
+    for (j = 0; j <= ndmy; j++)
+    {
+        for (k = 0; k <= ndmz; k++)
+        {
+            if (phi[0][0][j][k] != 0.0)
+            {
+                hasS = 0;
+            }
+            sumplane += phi[0][0][j][k];
+            if ((sumplane == 0.0) && (j == ndmy) && (k == ndmz))
+            {
+                hasS = 1;
+            }
+        }
+    }
+    // search interface front
+    if (hasS == 1)
+    {
+        allS = 1;
+        for (i = 0; i <= ndmx; i++)
+        {
+            if (allS == 0)
+            {
+                intpos = i - 1;
+                inttemp = temp[intpos][0][0];
+                break;
+            }
+            for (j = 0; j <= ndmy; j++)
+            {
+                for (k = 0; k <= ndmz; k++)
+                {
+                    if (phi[0][i][j][k] > 0.0)
+                    {
+                        allS = 0;
+                        break;
+                    }
+                }
+                if (allS == 0)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    // if (intpos > (NDX / 4))
+    // {
+    //     // frapass += 1;
+    //     // curst = istep;
+    //     for (ix = 0; ix <= ndmx - 1; ix++)
+    //     {
+    //         for (iy = 0; iy <= ndmy; iy++)
+    //         {
+    //             for (iz = 0; iz <= ndmz; iz++)
+    //             {
+    //                 for (ii = 0; ii <= nm; ii++)
+    //                 {
+    //                     phi[ii][ix][iy][iz] = phi[ii][ix + 1][iy][iz];
+    //                 }
+    //                 temp[ix][iy][iz] = temp[ix + 1][iy][iz];
+    //             }
+    //         }
+    //     }
+    //     for (iy = 0; iy <= ndmy; iy++)
+    //     {
+    //         for (iz = 0; iz <= ndmz; iz++)
+    //         {
+    //             for (ii = 0; ii <= nm; ii++)
+    //             {
+    //                 phi[ii][ndmx][iy][iz] = phi[ii][ndmx - 1][iy][iz];
+    //             }
+    //             temp[ndmx][iy][iz] = temp[ndmx - 1][iy][iz] + Tg * dx;
+    //         }
+    //     }
+    //     T_left += Tg * dx;
+    //     T_right += Tg * dx;
+    // }
 
     istep = istep + 1.;
     if (istep < nstep)
