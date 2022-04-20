@@ -87,15 +87,16 @@ double termx, termx0, termx1, termx0dx, termx1dx;
 double termy, termy0, termy1, termy0dy, termy1dy;
 double termz, termz0, termz1, termz0dz, termz1dz;
 
-double sumplane, inttemp;
+double tempip, tempim, Tddtt;
+double sumplane, inttemp, intvel;
 int hasS, allS;
-int intpos;
+int intpos, frapass, curpos, prepos, curst, prest;
 
 int x11, y11, x1h[10], y1h[10]; //初期核の座標
 double t, r0, r;
 
 double ****phi, ****phi2;
-double ***temp;
+double ***temp, ***temp2;
 int ***phiNum, ****phiIdx;
 double **aij, **wij, **mij;
 double **anij, **thij, **vpij, **etaij;
@@ -136,13 +137,15 @@ int main(int argc, char *argv[])
     }
 
     temp = new double **[NDX];
+    temp2 = new double **[NDX];
     for (i = 0; i <= ndmx; i++)
     {
         temp[i] = new double *[NDY];
-
+        temp2[i] = new double *[NDY];
         for (j = 0; j <= ndmy; j++)
         {
             temp[i][j] = new double[NDZ];
+            temp2[i][j] = new double[NDZ];
         }
     }
 
@@ -175,13 +178,13 @@ int main(int argc, char *argv[])
         etaij[ni] = new double[N];
     }
 
-    nstep = 1001;
-    pstep = 100;
+    nstep = 1000001;
+    pstep = 100000;
 
     dx = 1.0e-5;
     dtime = 1.0e-6;
     delta = 5.0 * dx;
-    mobi = 1.68e-6;
+    mobi = 1.68e-9;
 
     gamma0 = 0.5;
     astre = 0.03;
@@ -194,7 +197,7 @@ int main(int argc, char *argv[])
     Tg = 8.0e3;
     Tv = 1.5e-4;
     Tr = Tg * Tv;
-    T_left = 1686 - NDX / 4 * dx * Tg;
+    T_left = 1683.4 - NDX / 4 * dx * Tg;
     T_right = T_left + Tg * NDX * dx;
 
     sph_s = 2.29e6;
@@ -270,6 +273,7 @@ start:;
     {
         std::cout << "interface position is: " << intpos << std::endl;
         std::cout << "interface temperature is: " << inttemp << std::endl;
+        std::cout << "interface veocity is: " << intvel << std::endl;
         // ****** XY *******
         cimg_forXY(phi_fldxy, x, y)
         {
@@ -280,39 +284,63 @@ start:;
         sprintf(outFilePhi_xy, "figures/phi/2dxy%d.png", istep);
         phi_fldxy.save_jpeg(outFilePhi_xy);
 
-        FILE *stream;
+        FILE *stream; //ストリームのポインタ設定
         char buffer[30];
-        sprintf(buffer, "data/phi/3d%d.vtk", istep);
-        stream = fopen(buffer, "a");
+        sprintf(buffer, "data/phi/1d%d.csv", istep);
+        stream = fopen(buffer, "a"); //書き込む先のファイルを追記方式でオープン
 
-        fprintf(stream, "# vtk DataFile Version 1.0\n");
-        fprintf(stream, "phi_%d.vtk\n", istep);
-        fprintf(stream, "ASCII\n");
-        fprintf(stream, "DATASET STRUCTURED_POINTS\n");
-        fprintf(stream, "DIMENSIONS %d %d %d\n", NDX, NDY, NDZ);
-        fprintf(stream, "ORIGIN 0.0 0.0 0.0\n");
-        fprintf(stream, "ASPECT_RATIO 1.0 1.0 1.0\n");
-        fprintf(stream, "\n");
-        fprintf(stream, "POINT_DATA %d\n", NDX * NDY * NDZ);
-        fprintf(stream, "SCALARS scalars float\n");
-        fprintf(stream, "LOOKUP_TABLE default\n");
-
-        for (k = 0; k <= ndmz; k++)
+        for (i = 0; i <= ndmx; i++)
         {
-            for (j = 0; j <= ndmy; j++)
-            {
-                for (i = 0; i <= ndmx; i++)
-                {
-                    // sump = 0.0;
-                    // for (ii = 0; ii <= nm; ii++)
-                    // {
-                    //     sump += phi[ii][i][j][k] * phi[ii][i][j][k];
-                    // }
-                    fprintf(stream, "%e\n", phi[1][i][j][k]);
-                }
-            }
+            fprintf(stream, "%e   ", phi[1][i][0][0]);
+            fprintf(stream, "\n");
         }
-        fclose(stream);
+        fclose(stream); //ファイルをクローズ
+
+        FILE *streamt; //ストリームのポインタ設定
+        char buffert[30];
+        sprintf(buffert, "data/temp/1d%d.csv", istep);
+        streamt = fopen(buffert, "a"); //書き込む先のファイルを追記方式でオープン
+
+        for (i = 0; i <= ndmx; i++)
+        {
+            fprintf(streamt, "%e   ", (temp[i][0][0] - Tm));
+            fprintf(streamt, "\n");
+        }
+        fclose(streamt); //ファイルをクローズ
+
+        // FILE *stream;
+        // char buffer[30];
+        // sprintf(buffer, "data/phi/3d%d.vtk", istep);
+        // stream = fopen(buffer, "a");
+
+        // fprintf(stream, "# vtk DataFile Version 1.0\n");
+        // fprintf(stream, "phi_%d.vtk\n", istep);
+        // fprintf(stream, "ASCII\n");
+        // fprintf(stream, "DATASET STRUCTURED_POINTS\n");
+        // fprintf(stream, "DIMENSIONS %d %d %d\n", NDX, NDY, NDZ);
+        // fprintf(stream, "ORIGIN 0.0 0.0 0.0\n");
+        // fprintf(stream, "ASPECT_RATIO 1.0 1.0 1.0\n");
+        // fprintf(stream, "\n");
+        // fprintf(stream, "POINT_DATA %d\n", NDX * NDY * NDZ);
+        // fprintf(stream, "SCALARS scalars float\n");
+        // fprintf(stream, "LOOKUP_TABLE default\n");
+
+        // for (k = 0; k <= ndmz; k++)
+        // {
+        //     for (j = 0; j <= ndmy; j++)
+        //     {
+        //         for (i = 0; i <= ndmx; i++)
+        //         {
+        //             // sump = 0.0;
+        //             // for (ii = 0; ii <= nm; ii++)
+        //             // {
+        //             //     sump += phi[ii][i][j][k] * phi[ii][i][j][k];
+        //             // }
+        //             fprintf(stream, "%e\n", phi[1][i][j][k]);
+        //         }
+        //     }
+        // }
+        // fclose(stream);
     }
 
     for (i = 0; i <= ndmx; i++)
@@ -630,6 +658,11 @@ start:;
                     {
                         phi2[ii][i][j][k] = 0.0;
                     }
+                    // termperature increase from release of latent heat
+                    if (ii == 1)
+                    {
+                        temp[i][j][k] += pddtt * dtime * 30.0 * pow(phi[1][i][j][k], 2.0) * pow((1.0 - phi[1][i][j][k]), 2.0) * dH / sph_s;
+                    }
                 }
             } // j
         }     // i
@@ -668,6 +701,72 @@ start:;
             }
         }
     }
+
+    for (i = 0; i <= ndmx; i++)
+    {
+        for (j = 0; j <= ndmy; j++)
+        {
+            for (k = 0; k <= ndmz; k++)
+            {
+                ip = i + 1;
+                im = i - 1;
+                jp = j + 1;
+                jm = j - 1;
+                kp = k + 1;
+                km = k - 1;
+                // right boundary
+                if (i == ndmx)
+                {
+                    tempip = T_right;
+                }
+                else
+                {
+                    tempip = temp[ip][j][k];
+                }
+                // left boundary
+                if (i == 0)
+                {
+                    tempim = T_left;
+                }
+                else
+                {
+                    tempim = temp[im][j][k];
+                }
+                if (j == ndmy)
+                {
+                    jp = 0;
+                }
+                if (j == 0)
+                {
+                    jm = ndmy;
+                }
+                if (k == ndmz)
+                {
+                    kp = 0;
+                }
+                if (k == 0)
+                {
+                    km = ndmz;
+                }
+                Tddtt = (Cdt_l * phi[0][i][j][k] + Cdt_s * phi[1][i][j][k]) * (tempip + tempim + temp[i][jp][k] + temp[i][jm][k] + temp[i][j][kp] + temp[i][j][km] - 6.0 * temp[i][j][k]) / dx / dx;
+                temp2[i][j][k] = temp[i][j][k] + Tddtt * dtime;
+            }
+        }
+    }
+
+    for (i = 0; i <= ndmx; i++)
+    {
+        for (j = 0; j <= ndmy; j++)
+        {
+            for (k = 0; k <= ndmz; k++)
+            {
+                temp[i][j][k] = temp2[i][j][k];
+            }
+        }
+    }
+
+    T_left -= Tr * dtime;
+    T_right -= Tr * dtime;
 
     sumplane = 0.0;
     hasS = 0;
@@ -718,38 +817,42 @@ start:;
         }
     }
 
-    // if (intpos > (NDX / 4))
-    // {
-    //     // frapass += 1;
-    //     // curst = istep;
-    //     for (ix = 0; ix <= ndmx - 1; ix++)
-    //     {
-    //         for (iy = 0; iy <= ndmy; iy++)
-    //         {
-    //             for (iz = 0; iz <= ndmz; iz++)
-    //             {
-    //                 for (ii = 0; ii <= nm; ii++)
-    //                 {
-    //                     phi[ii][ix][iy][iz] = phi[ii][ix + 1][iy][iz];
-    //                 }
-    //                 temp[ix][iy][iz] = temp[ix + 1][iy][iz];
-    //             }
-    //         }
-    //     }
-    //     for (iy = 0; iy <= ndmy; iy++)
-    //     {
-    //         for (iz = 0; iz <= ndmz; iz++)
-    //         {
-    //             for (ii = 0; ii <= nm; ii++)
-    //             {
-    //                 phi[ii][ndmx][iy][iz] = phi[ii][ndmx - 1][iy][iz];
-    //             }
-    //             temp[ndmx][iy][iz] = temp[ndmx - 1][iy][iz] + Tg * dx;
-    //         }
-    //     }
-    //     T_left += Tg * dx;
-    //     T_right += Tg * dx;
-    // }
+    if (intpos > (NDX / 4))
+    {
+        frapass += 1;
+        curpos = frapass;
+        curst = istep;
+        intvel = double(curpos - prepos) * dx / double(curst - prest) / dtime;
+        prepos = curpos;
+        prest = curst;
+        for (i = 0; i <= ndmx - 1; i++)
+        {
+            for (j = 0; j <= ndmy; j++)
+            {
+                for (k = 0; k <= ndmz; k++)
+                {
+                    for (ii = 0; ii <= nm; ii++)
+                    {
+                        phi[ii][i][j][k] = phi[ii][i + 1][j][k];
+                    }
+                    temp[i][j][k] = temp[i + 1][j][k];
+                }
+            }
+        }
+        for (j = 0; j <= ndmy; j++)
+        {
+            for (k = 0; k <= ndmz; k++)
+            {
+                for (ii = 0; ii <= nm; ii++)
+                {
+                    phi[ii][ndmx][j][k] = phi[ii][ndmx - 1][j][k];
+                }
+                temp[ndmx][j][k] = temp[ndmx - 1][j][k] + Tg * dx;
+            }
+        }
+        T_left += Tg * dx;
+        T_right += Tg * dx;
+    }
 
     istep = istep + 1.;
     if (istep < nstep)
